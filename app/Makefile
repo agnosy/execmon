@@ -7,4 +7,4 @@ all:
 	$(CC) $(SOURCES) $(CFLAGS) -o $(BIN_NAME)
 	cp $(BIN_NAME) ../$(BIN_NAME)
 clean:
-	rm -f ../$(BIN_NAME)
+	rm -f $(BIN_NAME) ../$(BIN_NAME)
