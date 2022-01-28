@@ -68,6 +68,74 @@ static asmlinkage long new_sys_execve(const char __user * filename,
 	size_t exec_line_size;
 	char * exec_str = NULL;
 	char ** p_argv = (char **) argv;
+	char ktemp[1024];
+
+	KLOG_PRINT("filename.length: [%ld]", strlen_user(filename));
+
+	memset(ktemp, 0, sizeof(ktemp));
+	if(strncpy_from_user(ktemp, filename, sizeof(ktemp)) >= 0) {
+		KLOG_PRINT("ktemp [%s]", ktemp);
+	} else {
+		KLOG_PRINT("strncpy_user failed ...");
+	}
+
+    {
+        /* get the number of arguments */
+        int argc = 0;
+        int i = 0;
+        int kcmdline_size = 1024;
+        char * kcmdline = vmalloc(kcmdline_size);
+        memset(kcmdline, 0, kcmdline_size);
+        if (argv) {
+            while(1) {
+                char * karg = NULL;
+                unsigned long rv = -1;
+                if((rv = copy_from_user(&karg, argv + i, sizeof(karg))) >= 0) {
+                    if (NULL == karg) break;
+                    KLOG_PRINT("arg[%d] [%p]", i, karg);
+                    i++;
+                    memset(ktemp, 0, sizeof(ktemp));
+                    if(strncpy_from_user(ktemp, (const char __user *)karg, sizeof(ktemp)) >= 0) {
+		                KLOG_PRINT("arg[%d] [%s]", i, ktemp);
+		                strncat(kcmdline, ktemp, strlen(ktemp));
+		                strncat(kcmdline, " ", strlen(" "));
+                    } else {
+		                KLOG_PRINT("strncpy_from_user: failed");
+                    }
+                } else {
+                    KLOG_PRINT("copy_from_user: failed for arg [%d]", i);
+                }
+            }
+        }
+
+        argc = i;
+        if (argc > 0) {
+            /* account for the space that is being appended */
+            int cmdline_length = strlen(kcmdline) - 1;
+            KLOG_PRINT("cmdline_length [%d]", cmdline_length);
+            kcmdline[cmdline_length] = '\0';
+        }
+        KLOG_PRINT("total arguments - argc [%d]", argc);
+        KLOG_PRINT("kcmdline [%s]", kcmdline);
+        if (kcmdline) vfree(kcmdline);
+    }
+
+	{
+        char ** kargv = NULL;
+        unsigned long rv = -1;
+        if((rv = copy_from_user(&kargv, argv, sizeof(kargv))) >= 0) {
+            KLOG_PRINT("kargv [%p]", kargv);
+            memset(ktemp, 0, sizeof(ktemp));
+            if(strncpy_from_user(ktemp, (const char __user *)kargv, sizeof(ktemp)) >= 0) {
+		        KLOG_PRINT("arg0 [%s]", ktemp);
+            } else {
+		        KLOG_PRINT("strncpy_from_user: failed");
+            }
+        } else {
+            KLOG_PRINT("copy_from_user: failed ...");
+        }
+	}
+	return orig_sys_execve_fn(filename, argv, envp);
 
 	exec_line_size = (strlen(filename) + 1);
 
