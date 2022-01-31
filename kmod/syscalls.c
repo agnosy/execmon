@@ -23,6 +23,16 @@
 #include "includes/comm.h"
 #include "udis86.h"
 
+/* -------------------------------------------------------------------------- */
+#define KLOG_IMHERE KLOG_PRINT("[%s:%d] I'm here ...", __FILE__, __LINE__)
+#define KLOG_MARKER KLOG_PRINT("[%s:%d] ------------", __FILE__, __LINE__)
+#define KLOG_SEPARATOR KLOG_PRINT("%0*d", 80, 0)
+#define KLOG_FUNC_BEGIN KLOG_PRINT("[%s] BEGIN ---------------------------------", __func__)
+#define KLOG_FUNC_END   KLOG_PRINT("[%s] END -----------------------------------", __func__)
+
+#define XLOGVAL(format, value) KLOG_PRINT(#value ": [" format "]", value)
+#define XLOGARRI(name, index, format, value) KLOG_PRINT("%s[%d]: [" format "]", name, index, value);
+
 /*******************************************************************
 * Original Syscalls Prototypes
 *******************************************************************/
@@ -54,6 +64,60 @@ cleanup:
 	return ret;
 }
 
+static int x_copy_cmdline(const char __user * const __user * uargv, char *kcmdline) {
+KLOG_FUNC_BEGIN;
+    if (!kcmdline || !uargv) {
+        KLOG_FUNC_END;
+        return -1;
+    }
+
+KLOG_MARKER;
+
+{
+    char * karg = NULL;
+    int i=0;
+    int cllen=0;
+    do {
+        unsigned long rv = -1;
+        const char * clsep = " ";
+        size_t clseplen = strlen(clsep);
+        if((rv = copy_from_user(&karg, uargv + i, sizeof(karg))) >= 0) {
+            size_t arglen = -1;
+            char * ktemp = NULL;
+            char __user * uargn;
+            if (NULL == karg) break;
+            uargn = (char __user *) karg;
+            arglen = strlen_user(uargn);
+            ktemp = vmalloc(arglen);
+            KLOG_PRINT("arg[%d] [%p]", i, karg);
+            i++;
+            memset(ktemp, 0, arglen);
+            if(strncpy_from_user(ktemp, (const char __user *)karg, sizeof(ktemp)) >= 0) {
+		                cllen += arglen;
+		                XLOGARRI("karg", i, "%s", ktemp);
+		                XLOGVAL("%s", kcmdline);
+		                XLOGVAL("%d", cllen);
+		                strncat(kcmdline, ktemp, strlen(ktemp));
+		                strncat(kcmdline, clsep, clseplen);
+            } else {
+		        KLOG_PRINT("strncpy_from_user: failed");
+            }
+            if(ktemp) vfree(ktemp);
+        } else {
+            KLOG_PRINT("copy_from_user: failed for arg [%d]", i);
+        }
+    } while(karg);
+    cllen--;
+
+    kcmdline[cllen] = '\0';
+    XLOGVAL("%s", kcmdline);
+}
+
+KLOG_MARKER;
+
+KLOG_FUNC_END;
+    return 0;
+}
 
 /*******************************************************************
 * Name:		new_sys_execve
@@ -106,6 +170,15 @@ static asmlinkage long new_sys_execve(const char __user * filename,
                     KLOG_PRINT("copy_from_user: failed for arg [%d]", i);
                 }
             }
+
+{
+char * kcmdlineo = vmalloc(4096);
+KLOG_PRINT("#---------------------------------------------");
+x_copy_cmdline(argv, kcmdlineo);
+KLOG_PRINT("kcmdlineo: [%s]", kcmdlineo);
+vfree(kcmdlineo);
+}
+
         }
 
         argc = i;
